@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 2.8)
-project (MiniRenderer)
+project (MiniRayTracing)
 
 if (NOT CMAKE_BUILD_TYPE)
   set (CMAKE_BUILD_TYPE "Debug")
@@ -30,6 +30,6 @@ message (STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 source_group(TREE ${SOURCE_DIR} FILES ${SOURCE_FILES})
 source_group(TREE ${INCLUDE_DIR} FILES ${INCLUDE_FILES})
 
-add_executable(MiniRenderer ${SOURCE_FILES})
+add_executable(MiniRayTracing ${SOURCE_FILES})
 
-target_include_directories(MiniRenderer PUBLIC ${INCLUDE_DIR})
+target_include_directories(MiniRayTracing PUBLIC ${INCLUDE_DIR})
