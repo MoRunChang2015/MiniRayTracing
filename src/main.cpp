@@ -79,7 +79,8 @@ bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Spher
             checkerboardDistance = d;
             hit = point;
             hitNormal = {0.f, 1.f, 0.f};
-            material.diffuse_ = ((static_cast<int>(.5 * hit.x + 1000) + static_cast<int>(.5 * hit.z)) & 1) ? Vec3f{.3f, .3f, .3f}
+            material.diffuse_ = ((static_cast<int>(.5 * hit.x + 1000) + static_cast<int>(.5 * hit.z)) & 1)
+                                    ? Vec3f{.3f, .3f, .3f}
                                     : Vec3f{.3f, .2f, .1f};
         }
     }
@@ -128,6 +129,15 @@ Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& sp
     float specularLightIntensity = 0;
     for (const auto& light : lights) {
         const Vec3f lightDir = (light.position_ - hitPoint).normalize();
+        const float lightDistance = (light.position_ - hitPoint).norm();
+
+        const Vec3f shadowOri = lightDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
+                                                         : hitPoint + hitNormal * kReflectionOffset;
+        Vec3f shadowPoint, shadowNormal;
+        Material shadowMaterial;
+        if (scene_intersect(shadowOri, lightDir, spheres, shadowPoint, shadowNormal, shadowMaterial) &&
+            (shadowPoint - shadowOri).norm() < lightDistance)
+            continue;
         diffuseLightIntensity += light.intensity_ * std::max(0.f, lightDir * hitNormal);
         // -reflect(-lightDir, hitNormal) = reflect(lightDir, hitNormal)
         specularLightIntensity +=
