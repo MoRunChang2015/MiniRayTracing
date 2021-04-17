@@ -10,6 +10,12 @@ const std::string kFrameBufferOutput = "./output.tga";
 const float kMaxDistance = 1000.f;
 const size_t kMaxReflectionTimes = 4;
 const float kReflectionOffset = 1e-3f;
+const float kCheckerboardThreshold = 1e-3f;
+const float kCheckerboardPlaneY = -4.f;
+const float kCheckerboardPlaneXMin = -10.f;
+const float kCheckerboardPlaneXMax = 10.f;
+const float kCheckerboardPlaneZMin = -30.f;
+const float kCheckerboardPlaneZMax = -10.f;
 
 struct Light {
     Light(const Vec3f& pos, const float& i) : position_(pos), intensity_(i){};
@@ -52,19 +58,32 @@ struct Sphere {
     }
 };
 
-bool scene_intersect(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& spheres, Vec3f& hit,
+bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& spheres, Vec3f& hit,
                      Vec3f& hitNormal, Material& material) {
     float sphereDistance = std::numeric_limits<float>::max();
     for (const auto& sphere : spheres) {
         float distance;
-        if (sphere.ray_intersect(org, dir, distance) && distance < sphereDistance) {
+        if (sphere.ray_intersect(ori, dir, distance) && distance < sphereDistance) {
             sphereDistance = distance;
-            hit = org + dir * distance;
+            hit = ori + dir * distance;
             hitNormal = (hit - sphere.center_).normalize();
             material = sphere.material_;
         }
     }
-    return sphereDistance < kMaxDistance;
+    float checkerboardDistance = std::numeric_limits<float>::max();
+    if (std::fabs(dir.y) > kCheckerboardThreshold) {
+        float d = (kCheckerboardPlaneY - ori.y) / dir.y;
+        Vec3f point = ori + dir * d;
+        if (d > 0 && point.x > kCheckerboardPlaneXMin && point.x < kCheckerboardPlaneXMax &&
+            point.z > kCheckerboardPlaneZMin && point.z < kCheckerboardPlaneZMax && d < sphereDistance) {
+            checkerboardDistance = d;
+            hit = point;
+            hitNormal = {0.f, 1.f, 0.f};
+            material.diffuse_ = ((static_cast<int>(.5 * hit.x + 1000) + static_cast<int>(.5 * hit.z)) & 1) ? Vec3f{.3f, .3f, .3f}
+                                    : Vec3f{.3f, .2f, .1f};
+        }
+    }
+    return std::min(sphereDistance, checkerboardDistance) < kMaxDistance;
 }
 
 Vec3f reflect(const Vec3f& in, const Vec3f& normal) { return in - normal * 2.f * (in * normal); }
@@ -86,13 +105,13 @@ Vec3f refract(const Vec3f& in, const Vec3f& normal, const float& refractiveIndex
     return k < 0 ? Vec3f(0.f, 0.f, 0.f) : in * eta + n * (eta * cosIn - sqrtf(k));
 }
 
-Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& spheres,
-                  const std::vector<Light>& lights, size_t depth=0) {
+Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& spheres, const std::vector<Light>& lights,
+               size_t depth = 0) {
     Vec3f background{0.2, 0.7, 0.8};
     Vec3f hitPoint, hitNormal;
     Material material;
 
-    if (depth > kMaxReflectionTimes|| !scene_intersect(org, dir, spheres, hitPoint, hitNormal, material)) {
+    if (depth > kMaxReflectionTimes || !scene_intersect(org, dir, spheres, hitPoint, hitNormal, material)) {
         return background;
     }
 
@@ -115,7 +134,8 @@ Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& sp
             powf(std::max(0.f, reflect(lightDir, hitNormal) * dir), material.specularExponent_) * light.intensity_;
     }
     Vec3f out = material.diffuse_ * diffuseLightIntensity * material.albedo_[0] +
-                Vec3f(1.f, 1.f, 1.f) * specularLightIntensity * material.albedo_[1] + refectColor * material.albedo_[2] + refractColor * material.albedo_[3];
+                Vec3f(1.f, 1.f, 1.f) * specularLightIntensity * material.albedo_[1] +
+                refectColor * material.albedo_[2] + refractColor * material.albedo_[3];
     float max = std::max(out[0], std::max(out[1], out[2]));
     if (max > 1.f) out = out * (1 / max);
     return out;
