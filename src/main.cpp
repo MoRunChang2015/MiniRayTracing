@@ -20,9 +20,10 @@ struct Light {
 
 struct Material {
     Material() = default;
-    Material(const Vec3f& a, const Vec3f& color, const float& spec)
-        : albedo_(a), diffuse_(color), specularExponent_(spec) {}
-    Vec3f albedo_{1.f, 0.f, 0.f};
+    Material(const float& r, const Vec4f& a, const Vec3f& color, const float& spec)
+        : refractiveIndex_(r), albedo_(a), diffuse_(color), specularExponent_(spec) {}
+    float refractiveIndex_{1.f};
+    Vec4f albedo_{1.f, 0.f, 0.f, 0.f};
     Vec3f diffuse_;
     float specularExponent_{0.f};
 };
@@ -68,6 +69,23 @@ bool scene_intersect(const Vec3f& org, const Vec3f& dir, const std::vector<Spher
 
 Vec3f reflect(const Vec3f& in, const Vec3f& normal) { return in - normal * 2.f * (in * normal); }
 
+// Snell's law
+Vec3f refract(const Vec3f& in, const Vec3f& normal, const float& refractiveIndex) {
+    float cosIn = -std::max(-1.f, std::min(1.f, in * normal));
+    float etaIn = 1.f, etaT = refractiveIndex;
+    Vec3f n = normal;
+
+    // if the ray is inside the object, swap the indices and invert the normal to get the correct result
+    if (cosIn < 0) {
+        cosIn = -cosIn;
+        std::swap(etaIn, etaT);
+        n = -normal;
+    }
+    float eta = etaIn / etaT;
+    float k = 1 - eta * eta * (1 - cosIn * cosIn);
+    return k < 0 ? Vec3f(0.f, 0.f, 0.f) : in * eta + n * (eta * cosIn - sqrtf(k));
+}
+
 Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& spheres,
                   const std::vector<Light>& lights, size_t depth=0) {
     Vec3f background{0.2, 0.7, 0.8};
@@ -79,9 +97,13 @@ Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& sp
     }
 
     const Vec3f reflectDir = reflect(dir, hitNormal).normalize();
+    const Vec3f refractDir = refract(dir, hitNormal, material.refractiveIndex_).normalize();
     const Vec3f reflectOri = reflectDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
                                                         : hitPoint + hitNormal * kReflectionOffset;
+    const Vec3f refractOri = refractDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
+                                                        : hitPoint + hitNormal * kReflectionOffset;
     const Vec3f refectColor = cast_ray(reflectOri, reflectDir, spheres, lights, depth + 1);
+    const Vec3f refractColor = cast_ray(refractOri, refractDir, spheres, lights, depth + 1);
 
     float diffuseLightIntensity = 0;
     float specularLightIntensity = 0;
@@ -93,7 +115,7 @@ Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& sp
             powf(std::max(0.f, reflect(lightDir, hitNormal) * dir), material.specularExponent_) * light.intensity_;
     }
     Vec3f out = material.diffuse_ * diffuseLightIntensity * material.albedo_[0] +
-                Vec3f(1.f, 1.f, 1.f) * specularLightIntensity * material.albedo_[1] + refectColor * material.albedo_[2];
+                Vec3f(1.f, 1.f, 1.f) * specularLightIntensity * material.albedo_[1] + refectColor * material.albedo_[2] + refractColor * material.albedo_[3];
     float max = std::max(out[0], std::max(out[1], out[2]));
     if (max > 1.f) out = out * (1 / max);
     return out;
@@ -114,13 +136,14 @@ void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std
 int main() {
     TGAImage frameBuffer(kWidth, kHeight, TGAImage::RGB);
 
-    Material ivory({0.6f, 0.3f, 0.1f}, {0.4f, 0.4f, 0.3f}, 50.f);
-    Material redRubber({0.9f, 0.1f, 0.0f}, {0.3f, 0.1f, 0.1f}, 10.f);
-    Material mirror({0.0f, 10.f, 0.8f}, {1.0f, 1.0f, 1.0f}, 1425.f);
+    Material ivory(1.0f, {0.6f, 0.3f, 0.1f, 0.0f}, {0.4f, 0.4f, 0.3f}, 50.f);
+    Material glass(1.5, {0.0f, 0.5f, 0.1f, 0.8f}, {0.6f, 0.7f, 0.8f}, 125.f);
+    Material redRubber(1.0, {0.9f, 0.1f, 0.0f, 0.0f}, {0.3f, 0.1f, 0.1f}, 10.f);
+    Material mirror(1.0, {0.0f, 10.f, 0.8f, 0.0f}, {1.0f, 1.0f, 1.0f}, 1425.f);
 
     std::vector<Sphere> spheres{
         {Vec3f{-3.f, 0.f, -16.f}, 2, ivory},
-        {Vec3f{-1.f, -1.5f, -12.f}, 2, mirror},
+        {Vec3f{-1.f, -1.5f, -12.f}, 2, glass},
         {Vec3f{1.5f, -0.5f, -18.f}, 3, redRubber},
         {Vec3f{7.f, 5.f, -18.f}, 4, mirror},
     };

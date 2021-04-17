@@ -9,9 +9,10 @@ class Matrix;
 
 template <size_t d, typename T>
 struct Vector {
-    Vector() {
-        for (size_t i = 0; i < d; ++i) raw[i] = T();
-    }
+    Vector() { raw.resize(d); }
+
+    Vector(std::initializer_list<T> l) : raw(l) {}
+
     T& operator[](const size_t& i) {
         assert(i < d);
         return raw[i];
@@ -28,7 +29,7 @@ struct Vector {
     }
 
    private:
-    T raw[d];
+    std::vector<T> raw;
 };
 
 template <typename T>
