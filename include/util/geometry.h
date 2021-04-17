@@ -4,8 +4,6 @@
 #include <iostream>
 #include <vector>
 
-
-
 template <size_t row, size_t col, typename T>
 class Matrix;
 
@@ -79,6 +77,8 @@ struct Vector<3, T> {
         *this = (*this) * (l / norm());
         return *this;
     }
+
+    Vector<3, T> operator-() const { return {-x, -y, -z}; }
 
     Vector<3, T> round() { return {std::round(x), std::round(y), std::round(z)}; }
 };

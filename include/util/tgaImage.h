@@ -35,6 +35,19 @@ struct TGAColor {
 
     TGAColor(unsigned char R, unsigned char G, unsigned char B, unsigned char A) : b(B), g(G), r(R), a(A), bytespp(4) {}
 
+    TGAColor(const Vec3f& c) : a(255), bytespp(4) {
+        r = static_cast<unsigned char>(c.x * 255.f);
+        g = static_cast<unsigned char>(c.y * 255.f);
+        b = static_cast<unsigned char>(c.z * 255.f);
+    }
+
+    TGAColor(const Vec4f &c) : bytespp(4) {
+        r = static_cast<unsigned char>(c[0] * 255.f);
+        g = static_cast<unsigned char>(c[1] * 255.f);
+        b = static_cast<unsigned char>(c[2] * 255.f);
+        a = static_cast<unsigned char>(c[3] * 255.f);
+    }
+
     TGAColor(int v, int bpp) : val(v), bytespp(bpp) {}
 
     TGAColor(const TGAColor &c) : val(c.val), bytespp(c.bytespp) {}

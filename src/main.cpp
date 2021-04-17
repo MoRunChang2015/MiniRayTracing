@@ -17,17 +17,11 @@ struct Light {
 
 struct Material {
     Material() = default;
-    Material(const TGAColor& color) : diffuse_(color){};
-    Material(const Vec3f& color) {
-        diffuse_ = TGAColor(static_cast<unsigned char>(color.x * 255), static_cast<unsigned char>(color.y * 255),
-                            static_cast<unsigned char>(color.z * 255), 255);
-    }
-    Material(const Vec4f& color) {
-        diffuse_ = TGAColor(static_cast<unsigned char>(color[0] * 255), static_cast<unsigned char>(color[1] * 255),
-                            static_cast<unsigned char>(color[2] * 255), static_cast<unsigned char>(color[3] * 255));
-    }
-
-    TGAColor diffuse_;
+    Material(const Vec2f& a, const Vec3f& color, const float& spec)
+        : albedo_(a), diffuse_(color), specularExponent_(spec) {}
+    Vec2f albedo_{1.f, 0.f};
+    Vec3f diffuse_;
+    float specularExponent_{0.f};
 };
 
 struct Sphere {
@@ -69,7 +63,10 @@ bool scene_intersect(const Vec3f& org, const Vec3f& dir, const std::vector<Spher
     return sphereDistance < 1000.f;
 }
 
-TGAColor cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
+Vec3f reflect(const Vec3f& in, const Vec3f& normal) { return in - normal * 2.f * (in * normal); }
+
+TGAColor cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& spheres,
+                  const std::vector<Light>& lights) {
     TGAColor background{51, 179, 204, 255};
     Vec3f hitPoint, hitNormal;
     Material material;
@@ -78,11 +75,19 @@ TGAColor cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>&
         return background;
     }
     float diffuseLightIntensity = 0;
+    float specularLightIntensity = 0;
     for (const auto& light : lights) {
         const Vec3f lightDir = (light.position_ - hitPoint).normalize();
         diffuseLightIntensity += light.intensity_ * std::max(0.f, lightDir * hitNormal);
+        // -reflect(-lightDir, hitNormal) = reflect(lightDir, hitNormal)
+        specularLightIntensity +=
+            powf(std::max(0.f, reflect(lightDir, hitNormal) * dir), material.specularExponent_) * light.intensity_;
     }
-    return material.diffuse_ * diffuseLightIntensity;
+    Vec3f out = material.diffuse_ * diffuseLightIntensity * material.albedo_[0] +
+                Vec3f(1.f, 1.f, 1.f) * specularLightIntensity * material.albedo_[1];
+    float max = std::max(out[0], std::max(out[1], out[2]));
+    if (max > 1.f) out = out * (1 / max);
+    return out;
 }
 
 void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
@@ -100,8 +105,8 @@ void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std
 int main() {
     TGAImage frameBuffer(kWidth, kHeight, TGAImage::RGB);
 
-    Material ivory({0.4f, 0.4f, 0.3f});
-    Material redRubber({0.3f, 0.1f, 0.1f});
+    Material ivory({0.6f, 0.3f}, {0.4f, 0.4f, 0.3f}, 50.f);
+    Material redRubber({0.9f, 0.1f}, {0.3f, 0.1f, 0.1f}, 10.f);
 
     std::vector<Sphere> spheres{
         {Vec3f{-3.f, 0.f, -16.f}, 2, ivory},
@@ -110,9 +115,7 @@ int main() {
         {Vec3f{7.f, 5.f, -18.f}, 4, ivory},
     };
 
-    std::vector<Light> lights {
-        { {-20.f, 20.f, 20.f}, 1.5 }
-    };
+    std::vector<Light> lights{{{-20.f, 20.f, 20.f}, 1.5}, {{30.f, 50.f, -25.f}, 1.8f}, {{30.f, 20.f, 30.f}, 1.7f}};
 
     render(frameBuffer, spheres, lights);
     frameBuffer.write_tga_file(kFrameBufferOutput.c_str());
