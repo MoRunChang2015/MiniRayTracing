@@ -2,6 +2,7 @@
 #define __IMAGE_H__
 
 #include <fstream>
+
 #include "geometry.h"
 
 #pragma pack(push, 1)
@@ -35,7 +36,7 @@ struct TGAColor {
 
     TGAColor(unsigned char R, unsigned char G, unsigned char B, unsigned char A) : b(B), g(G), r(R), a(A), bytespp(4) {}
 
-    TGAColor(const Vec3f& c) : a(255), bytespp(4) {
+    TGAColor(const Vec3f &c) : a(255), bytespp(4) {
         r = static_cast<unsigned char>(c.x * 255.f);
         g = static_cast<unsigned char>(c.y * 255.f);
         b = static_cast<unsigned char>(c.z * 255.f);
@@ -56,6 +57,10 @@ struct TGAColor {
         for (int i = 0; i < bpp; i++) {
             raw[i] = p[i];
         }
+    }
+
+    Vec3f to_linear() const {
+        return {static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f, static_cast<float>(b) / 255.0f};
     }
 
     TGAColor &operator=(const TGAColor &c) {

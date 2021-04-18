@@ -3,9 +3,11 @@
 #include <math.h>
 #undef _USE_MATH_DEFINES
 
+#include "resource/cubemap.h"
+
 const int kWidth = 800;
 const int kHeight = 600;
-const float kFov = M_PI / 2.0f;
+const float kFov = M_PI / 3.0f;
 const std::string kFrameBufferOutput = "./output.tga";
 const float kMaxDistance = 1000.f;
 const size_t kMaxReflectionTimes = 4;
@@ -17,6 +19,15 @@ const float kCheckerboardPlaneXMax = 10.f;
 const float kCheckerboardPlaneZMin = -30.f;
 const float kCheckerboardPlaneZMax = -10.f;
 
+const CubeMap skyBox{{
+    "../res/skybox/sky10ft.tga",
+    "../res/skybox/sky10up.tga",
+    "../res/skybox/sky10rt.tga",
+    "../res/skybox/sky10bk.tga",
+    "../res/skybox/sky10dn.tga",
+    "../res/skybox/sky10lf.tga",
+}};
+
 struct Light {
     Light(const Vec3f& pos, const float& i) : position_(pos), intensity_(i){};
 
@@ -24,9 +35,9 @@ struct Light {
     float intensity_;
 };
 
-struct Material {
-    Material() = default;
-    Material(const float& r, const Vec4f& a, const Vec3f& color, const float& spec)
+struct BaseMaterial {
+    BaseMaterial() = default;
+    BaseMaterial(const float& r, const Vec4f& a, const Vec3f& color, const float& spec)
         : refractiveIndex_(r), albedo_(a), diffuse_(color), specularExponent_(spec) {}
     float refractiveIndex_{1.f};
     Vec4f albedo_{1.f, 0.f, 0.f, 0.f};
@@ -37,10 +48,10 @@ struct Material {
 struct Sphere {
     Vec3f center_;
     float radius_;
-    Material material_;
+    BaseMaterial material_;
 
     Sphere(const Vec3f& c, const float& r) : center_(c), radius_(r){};
-    Sphere(const Vec3f& c, const float& r, const Material& m) : center_(c), radius_(r), material_(m){};
+    Sphere(const Vec3f& c, const float& r, const BaseMaterial& m) : center_(c), radius_(r), material_(m){};
 
     // dir is normalized
     bool ray_intersect(const Vec3f& org, const Vec3f& dir, float& t0) const {
@@ -59,7 +70,7 @@ struct Sphere {
 };
 
 bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& spheres, Vec3f& hit,
-                     Vec3f& hitNormal, Material& material) {
+                     Vec3f& hitNormal, BaseMaterial& material) {
     float sphereDistance = std::numeric_limits<float>::max();
     for (const auto& sphere : spheres) {
         float distance;
@@ -108,12 +119,11 @@ Vec3f refract(const Vec3f& in, const Vec3f& normal, const float& refractiveIndex
 
 Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& spheres, const std::vector<Light>& lights,
                size_t depth = 0) {
-    Vec3f background{0.2, 0.7, 0.8};
     Vec3f hitPoint, hitNormal;
-    Material material;
+    BaseMaterial material;
 
     if (depth > kMaxReflectionTimes || !scene_intersect(org, dir, spheres, hitPoint, hitNormal, material)) {
-        return background;
+        return skyBox.sample(dir).to_linear();
     }
 
     const Vec3f reflectDir = reflect(dir, hitNormal).normalize();
@@ -134,7 +144,7 @@ Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& sp
         const Vec3f shadowOri = lightDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
                                                          : hitPoint + hitNormal * kReflectionOffset;
         Vec3f shadowPoint, shadowNormal;
-        Material shadowMaterial;
+        BaseMaterial shadowMaterial;
         if (scene_intersect(shadowOri, lightDir, spheres, shadowPoint, shadowNormal, shadowMaterial) &&
             (shadowPoint - shadowOri).norm() < lightDistance)
             continue;
@@ -153,6 +163,7 @@ Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& sp
 
 void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
     const Vec3f cameraPos{0.f, 0.f, 0.f};
+
     for (size_t i = 0; i < kWidth; ++i)
         for (size_t j = 0; j < kHeight; ++j) {
             const float x = (2 * (i + 0.5) / static_cast<float>(kWidth) - 1) * tan(kFov / 2.f) * kWidth /
@@ -166,10 +177,10 @@ void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std
 int main() {
     TGAImage frameBuffer(kWidth, kHeight, TGAImage::RGB);
 
-    Material ivory(1.0f, {0.6f, 0.3f, 0.1f, 0.0f}, {0.4f, 0.4f, 0.3f}, 50.f);
-    Material glass(1.5, {0.0f, 0.5f, 0.1f, 0.8f}, {0.6f, 0.7f, 0.8f}, 125.f);
-    Material redRubber(1.0, {0.9f, 0.1f, 0.0f, 0.0f}, {0.3f, 0.1f, 0.1f}, 10.f);
-    Material mirror(1.0, {0.0f, 10.f, 0.8f, 0.0f}, {1.0f, 1.0f, 1.0f}, 1425.f);
+    BaseMaterial ivory(1.0f, {0.6f, 0.3f, 0.1f, 0.0f}, {0.4f, 0.4f, 0.3f}, 50.f);
+    BaseMaterial glass(1.5, {0.0f, 0.5f, 0.1f, 0.8f}, {0.6f, 0.7f, 0.8f}, 125.f);
+    BaseMaterial redRubber(1.0, {0.9f, 0.1f, 0.0f, 0.0f}, {0.3f, 0.1f, 0.1f}, 10.f);
+    BaseMaterial mirror(1.0, {0.0f, 10.f, 0.8f, 0.0f}, {1.0f, 1.0f, 1.0f}, 1425.f);
 
     std::vector<Sphere> spheres{
         {Vec3f{-3.f, 0.f, -16.f}, 2, ivory},
