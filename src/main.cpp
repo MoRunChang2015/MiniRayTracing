@@ -1,9 +1,14 @@
+#include <iostream>
+
 #include "util/tgaImage.h"
 #define _USE_MATH_DEFINES
 #include <math.h>
 #undef _USE_MATH_DEFINES
 
 #include "resource/cubemap.h"
+#include "resource/material.h"
+#include "resource/model.h"
+#include "resource/sphere.h"
 
 const int kWidth = 800;
 const int kHeight = 600;
@@ -18,6 +23,12 @@ const float kCheckerboardPlaneXMin = -10.f;
 const float kCheckerboardPlaneXMax = 10.f;
 const float kCheckerboardPlaneZMin = -30.f;
 const float kCheckerboardPlaneZMax = -10.f;
+const float kFloatLimit = 1e-5f;
+const std::string kDuckObj = "../res/duck.obj";
+const std::string kDiabloObj = "../res/diablo3_pose/diablo3_pose.obj";
+const std::string kDiabloDiffuse = "../res/diablo3_pose/diablo3_pose_diffuse.tga";
+const std::string kDiabloNormal = "../res/diablo3_pose/diablo3_pose_nm_tangent.tga";
+const std::string kDiabloSpec = "../res/diablo3_pose/diablo3_pose_spec.tga";
 
 const CubeMap skyBox{{
     "../res/skybox/sky10ft.tga",
@@ -35,67 +46,49 @@ struct Light {
     float intensity_;
 };
 
-struct BaseMaterial {
-    BaseMaterial() = default;
-    BaseMaterial(const float& r, const Vec4f& a, const Vec3f& color, const float& spec)
-        : refractiveIndex_(r), albedo_(a), diffuse_(color), specularExponent_(spec) {}
-    float refractiveIndex_{1.f};
-    Vec4f albedo_{1.f, 0.f, 0.f, 0.f};
-    Vec3f diffuse_;
-    float specularExponent_{0.f};
-};
-
-struct Sphere {
-    Vec3f center_;
-    float radius_;
-    BaseMaterial material_;
-
-    Sphere(const Vec3f& c, const float& r) : center_(c), radius_(r){};
-    Sphere(const Vec3f& c, const float& r, const BaseMaterial& m) : center_(c), radius_(r), material_(m){};
-
-    // dir is normalized
-    bool ray_intersect(const Vec3f& org, const Vec3f& dir, float& t0) const {
-        Vec3f l = center_ - org;
-        float tca = l * dir;
-        float d2 = l * l - tca * tca;
-        if (d2 > radius_ * radius_) return false;
-
-        float thc = sqrtf(radius_ * radius_ - d2);
-        t0 = tca - thc;
-        float t1 = tca + thc;
-        if (t0 < 0) t0 = t1;
-        if (t0 < 0) return false;
-        return true;
-    }
-};
-
-bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& spheres, Vec3f& hit,
-                     Vec3f& hitNormal, BaseMaterial& material) {
-    float sphereDistance = std::numeric_limits<float>::max();
+bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& spheres,
+                     const std::vector<Model> models, Vec3f& hit, Vec3f& hitNormal, RayTracingMaterial& material) {
+    float minDistance = std::numeric_limits<float>::max();
     for (const auto& sphere : spheres) {
         float distance;
-        if (sphere.ray_intersect(ori, dir, distance) && distance < sphereDistance) {
-            sphereDistance = distance;
+        if (sphere.ray_intersect(ori, dir, distance) && distance < minDistance) {
+            minDistance = distance;
             hit = ori + dir * distance;
             hitNormal = (hit - sphere.center_).normalize();
             material = sphere.material_;
         }
     }
+    bool isHit{false};
+    for (const auto& model : models) {
+        float distance;
+        float u, v;
+        Vec3f hitNormal_;
+        if (model.ray_intersect(ori, dir, distance, u, v, hitNormal_) && distance < minDistance) {
+            minDistance = distance;
+            hit = ori + dir * distance;
+            hitNormal = hitNormal_;
+            isHit = true;
+            material = model.get_raytracing_material(u, v);
+        }
+    }
+
     float checkerboardDistance = std::numeric_limits<float>::max();
     if (std::fabs(dir.y) > kCheckerboardThreshold) {
         float d = (kCheckerboardPlaneY - ori.y) / dir.y;
         Vec3f point = ori + dir * d;
         if (d > 0 && point.x > kCheckerboardPlaneXMin && point.x < kCheckerboardPlaneXMax &&
-            point.z > kCheckerboardPlaneZMin && point.z < kCheckerboardPlaneZMax && d < sphereDistance) {
+            point.z > kCheckerboardPlaneZMin && point.z < kCheckerboardPlaneZMax && d < minDistance) {
             checkerboardDistance = d;
             hit = point;
             hitNormal = {0.f, 1.f, 0.f};
+            material.albedo_ = {1.0f, 0.f, 0.f, 0.f};
             material.diffuse_ = ((static_cast<int>(.5 * hit.x + 1000) + static_cast<int>(.5 * hit.z)) & 1)
                                     ? Vec3f{.3f, .3f, .3f}
                                     : Vec3f{.3f, .2f, .1f};
+            material.specularExponent_ = 10.f;
         }
     }
-    return std::min(sphereDistance, checkerboardDistance) < kMaxDistance;
+    return std::min(minDistance, checkerboardDistance) < kMaxDistance;
 }
 
 Vec3f reflect(const Vec3f& in, const Vec3f& normal) { return in - normal * 2.f * (in * normal); }
@@ -117,23 +110,30 @@ Vec3f refract(const Vec3f& in, const Vec3f& normal, const float& refractiveIndex
     return k < 0 ? Vec3f(0.f, 0.f, 0.f) : in * eta + n * (eta * cosIn - sqrtf(k));
 }
 
-Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& spheres, const std::vector<Light>& lights,
-               size_t depth = 0) {
+Vec3f cast_ray(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& spheres, const std::vector<Model> models,
+               const std::vector<Light>& lights, size_t depth = 0) {
     Vec3f hitPoint, hitNormal;
-    BaseMaterial material;
+    RayTracingMaterial material;
 
-    if (depth > kMaxReflectionTimes || !scene_intersect(org, dir, spheres, hitPoint, hitNormal, material)) {
+    if (depth > kMaxReflectionTimes || !scene_intersect(ori, dir, spheres, models, hitPoint, hitNormal, material)) {
         return skyBox.sample(dir).to_linear();
     }
 
-    const Vec3f reflectDir = reflect(dir, hitNormal).normalize();
-    const Vec3f refractDir = refract(dir, hitNormal, material.refractiveIndex_).normalize();
-    const Vec3f reflectOri = reflectDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
-                                                        : hitPoint + hitNormal * kReflectionOffset;
-    const Vec3f refractOri = refractDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
-                                                        : hitPoint + hitNormal * kReflectionOffset;
-    const Vec3f refectColor = cast_ray(reflectOri, reflectDir, spheres, lights, depth + 1);
-    const Vec3f refractColor = cast_ray(refractOri, refractDir, spheres, lights, depth + 1);
+    Vec3f refectColor{0.f, 0.f, 0.f}, refractColor{0.f, 0.f, 0.f};
+    if (material.albedo_[2] > kFloatLimit) {
+        const Vec3f reflectDir = reflect(dir, hitNormal).normalize();
+        const Vec3f reflectOri = reflectDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
+                                                            : hitPoint + hitNormal * kReflectionOffset;
+        refectColor = cast_ray(reflectOri, reflectDir, spheres, models, lights, depth + 1);
+    }
+
+    if (material.albedo_[3] > kFloatLimit) {
+        const Vec3f refractDir = refract(dir, hitNormal, material.refractiveIndex_).normalize();
+
+        const Vec3f refractOri = refractDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
+                                                            : hitPoint + hitNormal * kReflectionOffset;
+        refractColor = cast_ray(refractOri, refractDir, spheres, models, lights, depth + 1);
+    }
 
     float diffuseLightIntensity = 0;
     float specularLightIntensity = 0;
@@ -144,8 +144,8 @@ Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& sp
         const Vec3f shadowOri = lightDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
                                                          : hitPoint + hitNormal * kReflectionOffset;
         Vec3f shadowPoint, shadowNormal;
-        BaseMaterial shadowMaterial;
-        if (scene_intersect(shadowOri, lightDir, spheres, shadowPoint, shadowNormal, shadowMaterial) &&
+        RayTracingMaterial shadowMaterial;
+        if (scene_intersect(shadowOri, lightDir, spheres, models, shadowPoint, shadowNormal, shadowMaterial) &&
             (shadowPoint - shadowOri).norm() < lightDistance)
             continue;
         diffuseLightIntensity += light.intensity_ * std::max(0.f, lightDir * hitNormal);
@@ -161,7 +161,8 @@ Vec3f cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>& sp
     return out;
 }
 
-void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
+void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std::vector<Model> models,
+            const std::vector<Light>& lights) {
     const Vec3f cameraPos{0.f, 0.f, 0.f};
 
     for (size_t i = 0; i < kWidth; ++i)
@@ -170,17 +171,19 @@ void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std
                             static_cast<float>(kHeight);
             const float y = -(2 * (j + 0.5) / static_cast<float>(kHeight) - 1) * tan(kFov / 2.f);
             Vec3f dir = Vec3f(x, y, -1).normalize();
-            frameBuffer.set(i, j, cast_ray(cameraPos, dir, spheres, lights));
+            std::cout << "Ray tacing (" << i << " , " << j << ")..";
+            frameBuffer.set(i, j, cast_ray(cameraPos, dir, spheres, models, lights));
+            std::cout << std::endl;
         }
 }
 
 int main() {
     TGAImage frameBuffer(kWidth, kHeight, TGAImage::RGB);
 
-    BaseMaterial ivory(1.0f, {0.6f, 0.3f, 0.1f, 0.0f}, {0.4f, 0.4f, 0.3f}, 50.f);
-    BaseMaterial glass(1.5, {0.0f, 0.5f, 0.1f, 0.8f}, {0.6f, 0.7f, 0.8f}, 125.f);
-    BaseMaterial redRubber(1.0, {0.9f, 0.1f, 0.0f, 0.0f}, {0.3f, 0.1f, 0.1f}, 10.f);
-    BaseMaterial mirror(1.0, {0.0f, 10.f, 0.8f, 0.0f}, {1.0f, 1.0f, 1.0f}, 1425.f);
+    RayTracingMaterial ivory(1.0f, {0.6f, 0.3f, 0.1f, 0.0f}, {0.4f, 0.4f, 0.3f}, 50.f);
+    RayTracingMaterial glass(1.5, {0.0f, 0.5f, 0.1f, 0.8f}, {0.6f, 0.7f, 0.8f}, 125.f);
+    RayTracingMaterial redRubber(1.0f, {0.9f, 0.1f, 0.0f, 0.0f}, {0.3f, 0.1f, 0.1f}, 10.f);
+    RayTracingMaterial mirror(1.0f, {0.0f, 10.f, 0.8f, 0.0f}, {1.0f, 1.0f, 1.0f}, 1425.f);
 
     std::vector<Sphere> spheres{
         {Vec3f{-3.f, 0.f, -16.f}, 2, ivory},
@@ -189,9 +192,27 @@ int main() {
         {Vec3f{7.f, 5.f, -18.f}, 4, mirror},
     };
 
+    Mesh duchMesh(kDuckObj);
+    Mesh diabloMesh(kDiabloObj);
+
+    Material diabloMat{kDiabloDiffuse, kDiabloNormal, kDiabloSpec};
+
+    std::vector<Model> models{{&duchMesh, nullptr, glass},
+                              {&diabloMesh, &diabloMat, {1.0f, {0.6f, 0.3f, 0.1f, 0.0f}, {0.f, 0.f, 0.f}, 0.f}}};
+
+    Matrix4x4 duckTransform = Matrix4x4::identity();
+    duckTransform[3] = {1.f, -1.5f, -12.f, 1.f};
+
+    Matrix4x4 diabloTransform = Matrix4x4::identity();
+    diabloTransform[0][0] = diabloTransform[1][1] = diabloTransform[2][2] = 0.25f;
+    diabloTransform[3] = {0.f, -1.5f, -18.f, 1.f};
+    models[0].set_transform(duckTransform);
+    models[1].set_transform(diabloTransform);
+
     std::vector<Light> lights{{{-20.f, 20.f, 20.f}, 1.5}, {{30.f, 50.f, -25.f}, 1.8f}, {{30.f, 20.f, 30.f}, 1.7f}};
 
-    render(frameBuffer, spheres, lights);
+    render(frameBuffer, spheres, models, lights);
+
     frameBuffer.write_tga_file(kFrameBufferOutput.c_str());
     return 0;
 }
