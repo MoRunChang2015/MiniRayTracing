@@ -5,6 +5,7 @@
 #include <math.h>
 #undef _USE_MATH_DEFINES
 
+#include "concurrent/concurrentModule.h"
 #include "resource/cubemap.h"
 #include "resource/material.h"
 #include "resource/model.h"
@@ -24,6 +25,7 @@ const float kCheckerboardPlaneXMax = 10.f;
 const float kCheckerboardPlaneZMin = -30.f;
 const float kCheckerboardPlaneZMax = -10.f;
 const float kFloatLimit = 1e-5f;
+const size_t kWorkersNum = 6;
 const std::string kDuckObj = "../res/duck.obj";
 const std::string kDiabloObj = "../res/diablo3_pose/diablo3_pose.obj";
 const std::string kDiabloDiffuse = "../res/diablo3_pose/diablo3_pose_diffuse.tga";
@@ -165,16 +167,16 @@ void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std
             const std::vector<Light>& lights) {
     const Vec3f cameraPos{0.f, 0.f, 0.f};
 
-    for (size_t i = 0; i < kWidth; ++i)
-        for (size_t j = 0; j < kHeight; ++j) {
-            const float x = (2 * (i + 0.5) / static_cast<float>(kWidth) - 1) * tan(kFov / 2.f) * kWidth /
-                            static_cast<float>(kHeight);
-            const float y = -(2 * (j + 0.5) / static_cast<float>(kHeight) - 1) * tan(kFov / 2.f);
-            Vec3f dir = Vec3f(x, y, -1).normalize();
-            std::cout << "Ray tacing (" << i << " , " << j << ")..";
-            frameBuffer.set(i, j, cast_ray(cameraPos, dir, spheres, models, lights));
-            std::cout << std::endl;
-        }
+    ConcurrentModule::parallelFor(kWidth * kHeight, [&cameraPos, &spheres, &models, &lights, &frameBuffer](const auto& index) {
+        const int i = index / kHeight;
+        const int j = index % kHeight;
+        const float x =
+            (2 * (i + 0.5) / static_cast<float>(kWidth) - 1) * tan(kFov / 2.f) * kWidth / static_cast<float>(kHeight);
+        const float y = -(2 * (j + 0.5) / static_cast<float>(kHeight) - 1) * tan(kFov / 2.f);
+        const Vec3f dir = Vec3f(x, y, -1).normalize();
+        frameBuffer.set(i, j, cast_ray(cameraPos, dir, spheres, models, lights));
+        std::cout << "Ray tracing (" << i << " , " << j << ")..Done" << std::endl;
+    });
 }
 
 int main() {
@@ -210,6 +212,8 @@ int main() {
     models[1].set_transform(diabloTransform);
 
     std::vector<Light> lights{{{-20.f, 20.f, 20.f}, 1.5}, {{30.f, 50.f, -25.f}, 1.8f}, {{30.f, 20.f, 30.f}, 1.7f}};
+
+    ConcurrentModule::getInstance().setNumWorkerThreads(kWorkersNum);
 
     render(frameBuffer, spheres, models, lights);
 
