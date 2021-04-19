@@ -112,7 +112,7 @@ Vec3f refract(const Vec3f& in, const Vec3f& normal, const float& refractiveIndex
     return k < 0 ? Vec3f(0.f, 0.f, 0.f) : in * eta + n * (eta * cosIn - sqrtf(k));
 }
 
-Vec3f cast_ray(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& spheres, const std::vector<Model> models,
+Vec3f cast_ray(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& spheres, const std::vector<Model>& models,
                const std::vector<Light>& lights, size_t depth = 0) {
     Vec3f hitPoint, hitNormal;
     RayTracingMaterial material;
@@ -121,12 +121,12 @@ Vec3f cast_ray(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& sp
         return skyBox.sample(dir).to_linear();
     }
 
-    Vec3f refectColor{0.f, 0.f, 0.f}, refractColor{0.f, 0.f, 0.f};
+    Vec3f reflectColor{0.f, 0.f, 0.f}, refractColor{0.f, 0.f, 0.f};
     if (material.albedo_[2] > kFloatLimit) {
         const Vec3f reflectDir = reflect(dir, hitNormal).normalize();
         const Vec3f reflectOri = reflectDir * hitNormal < 0 ? hitPoint - hitNormal * kReflectionOffset
                                                             : hitPoint + hitNormal * kReflectionOffset;
-        refectColor = cast_ray(reflectOri, reflectDir, spheres, models, lights, depth + 1);
+        reflectColor = cast_ray(reflectOri, reflectDir, spheres, models, lights, depth + 1);
     }
 
     if (material.albedo_[3] > kFloatLimit) {
@@ -157,13 +157,13 @@ Vec3f cast_ray(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& sp
     }
     Vec3f out = material.diffuse_ * diffuseLightIntensity * material.albedo_[0] +
                 Vec3f(1.f, 1.f, 1.f) * specularLightIntensity * material.albedo_[1] +
-                refectColor * material.albedo_[2] + refractColor * material.albedo_[3];
+                reflectColor * material.albedo_[2] + refractColor * material.albedo_[3];
     float max = std::max(out[0], std::max(out[1], out[2]));
     if (max > 1.f) out = out * (1 / max);
     return out;
 }
 
-void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std::vector<Model> models,
+void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std::vector<Model>& models,
             const std::vector<Light>& lights) {
     const Vec3f cameraPos{0.f, 0.f, 0.f};
 
@@ -194,12 +194,12 @@ int main() {
         {Vec3f{7.f, 5.f, -18.f}, 4, mirror},
     };
 
-    Mesh duchMesh(kDuckObj);
+    Mesh duckMesh(kDuckObj);
     Mesh diabloMesh(kDiabloObj);
 
     Material diabloMat{kDiabloDiffuse, kDiabloNormal, kDiabloSpec};
 
-    std::vector<Model> models{{&duchMesh, nullptr, glass},
+    std::vector<Model> models{{&duckMesh, nullptr, glass},
                               {&diabloMesh, &diabloMat, {1.0f, {0.6f, 0.3f, 0.1f, 0.0f}, {0.f, 0.f, 0.f}, 0.f}}};
 
     Matrix4x4 duckTransform = Matrix4x4::identity();
