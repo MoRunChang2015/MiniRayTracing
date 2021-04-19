@@ -49,7 +49,7 @@ struct Light {
 };
 
 bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& spheres,
-                     const std::vector<Model> models, Vec3f& hit, Vec3f& hitNormal, RayTracingMaterial& material) {
+                     const std::vector<Model>& models, Vec3f& hit, Vec3f& hitNormal, RayTracingMaterial& material) {
     float minDistance = std::numeric_limits<float>::max();
     for (const auto& sphere : spheres) {
         float distance;
@@ -60,7 +60,6 @@ bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Spher
             material = sphere.material_;
         }
     }
-    bool isHit{false};
     for (const auto& model : models) {
         float distance;
         float u, v;
@@ -69,8 +68,7 @@ bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Spher
             minDistance = distance;
             hit = ori + dir * distance;
             hitNormal = hitNormal_;
-            isHit = true;
-            material = model.get_raytracing_material(u, v);
+            material = model.get_ray_tracing_material(u, v);
         }
     }
 
@@ -167,16 +165,17 @@ void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std
             const std::vector<Light>& lights) {
     const Vec3f cameraPos{0.f, 0.f, 0.f};
 
-    ConcurrentModule::parallelFor(kWidth * kHeight, [&cameraPos, &spheres, &models, &lights, &frameBuffer](const auto& index) {
-        const int i = index / kHeight;
-        const int j = index % kHeight;
-        const float x =
-            (2 * (i + 0.5) / static_cast<float>(kWidth) - 1) * tan(kFov / 2.f) * kWidth / static_cast<float>(kHeight);
-        const float y = -(2 * (j + 0.5) / static_cast<float>(kHeight) - 1) * tan(kFov / 2.f);
-        const Vec3f dir = Vec3f(x, y, -1).normalize();
-        frameBuffer.set(i, j, cast_ray(cameraPos, dir, spheres, models, lights));
-        std::cout << "Ray tracing (" << i << " , " << j << ")..Done" << std::endl;
-    });
+    ConcurrentModule::parallelFor(
+        kWidth * kHeight, [&cameraPos, &spheres, &models, &lights, &frameBuffer](const auto& index) {
+            const int i = index / kHeight;
+            const int j = index % kHeight;
+            const float x = (2 * (i + 0.5) / static_cast<float>(kWidth) - 1) * tan(kFov / 2.f) * kWidth /
+                            static_cast<float>(kHeight);
+            const float y = -(2 * (j + 0.5) / static_cast<float>(kHeight) - 1) * tan(kFov / 2.f);
+            const Vec3f dir = Vec3f(x, y, -1).normalize();
+            frameBuffer.set(i, j, cast_ray(cameraPos, dir, spheres, models, lights));
+            std::cout << "Ray tracing (" << i << " , " << j << ")..Done" << std::endl;
+        });
 }
 
 int main() {
@@ -200,14 +199,13 @@ int main() {
     Material diabloMat{kDiabloDiffuse, kDiabloNormal, kDiabloSpec};
 
     std::vector<Model> models{{&duckMesh, nullptr, glass},
-                              {&diabloMesh, &diabloMat, {1.0f, {0.6f, 0.3f, 0.1f, 0.0f}, {0.f, 0.f, 0.f}, 0.f}}};
+                              {&diabloMesh, &diabloMat, {1.0f, {0.8f, 0.1f, 0.1f, 0.0f}, {0.f, 0.f, 0.f}, 0.f}}};
 
     Matrix4x4 duckTransform = Matrix4x4::identity();
-    duckTransform[3] = {1.f, -1.5f, -12.f, 1.f};
+    duckTransform[3] = {1.f, 0.f, -3.f, 1.f};
 
     Matrix4x4 diabloTransform = Matrix4x4::identity();
-    diabloTransform[0][0] = diabloTransform[1][1] = diabloTransform[2][2] = 0.25f;
-    diabloTransform[3] = {0.f, -1.5f, -18.f, 1.f};
+    diabloTransform[3] = {0.f, 0.f, -2.5f, 1.f};
     models[0].set_transform(duckTransform);
     models[1].set_transform(diabloTransform);
 

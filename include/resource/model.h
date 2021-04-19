@@ -26,7 +26,7 @@ class Model {
 
     bool ray_intersect(const Vec3f& ori, const Vec3f& dir, float& t0, float& u, float& v, Vec3f& hitNormal) const;
 
-    RayTracingMaterial get_raytracing_material(const float& u, const float& v) const;
+    RayTracingMaterial get_ray_tracing_material(const float& u, const float& v) const;
 
    private:
     Mesh* meshRes_{nullptr};

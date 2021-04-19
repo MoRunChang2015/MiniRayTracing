@@ -99,7 +99,7 @@ std::vector<int> Mesh::face_normal(const int& idx) const {
 const std::vector<Mesh::Vertex>& Mesh::face(const int& idx) const { return faces_[idx]; }
 
 bool Mesh::ray_triangle_intersect(const int& faceIndex, const Vec3f& orig, const Vec3f& dir, float& tnear, float& u,
-                                  float& v) {
+                                  float& v) const {
     const auto& face_ = face(faceIndex);
     Vec3f edge1 = vert(face_[1].vertIdx()) - vert(face_[0].vertIdx());
     Vec3f edge2 = vert(face_[2].vertIdx()) - vert(face_[0].vertIdx());

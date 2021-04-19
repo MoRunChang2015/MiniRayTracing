@@ -249,6 +249,16 @@ Matrix<row, col, T> operator/(Matrix<row, col, T> lhs, const T& rhs) {
 }
 
 template <size_t row, size_t col, typename T>
+Vector<col, T> operator*(const Vector<row, T>& lhs, const Matrix<row, col, T>& rhs) {
+    Vector<col, T> ret;
+    for (size_t j = 0; j < col; ++j) {
+        ret[j] = 0;
+        for (size_t i = 0; i < row; ++i) ret[j] += lhs[i] * rhs[i][j];
+    }
+    return ret;
+}
+
+template <size_t row, size_t col, typename T>
 std::ostream& operator<<(std::ostream& s, Matrix<row, col, T>& m) {
     s << "[" << std::endl;
     for (size_t i = 0; i < row; ++i) s << m[i] << std::endl;

@@ -29,7 +29,7 @@ class Mesh {
     std::vector<int> face_normal(const int& idx) const;
     const std::vector<Vertex>& face(const int& idx) const;
 
-    bool ray_triangle_intersect(const int& faceIndex, const Vec3f& orig, const Vec3f& dir, float& tnear, float& u, float& v);
+    bool ray_triangle_intersect(const int& faceIndex, const Vec3f& orig, const Vec3f& dir, float& tnear, float& u, float& v) const;
 
     std::pair<Vec3f, Vec3f> get_localbound() { return bound_; }
 
