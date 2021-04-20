@@ -25,7 +25,7 @@ const float kCheckerboardPlaneXMax = 10.f;
 const float kCheckerboardPlaneZMin = -30.f;
 const float kCheckerboardPlaneZMax = -10.f;
 const float kFloatLimit = 1e-5f;
-const size_t kWorkersNum = 6;
+const size_t kWorkersNum = 4;
 const std::string kDuckObj = "../res/duck.obj";
 const std::string kDiabloObj = "../res/diablo3_pose/diablo3_pose.obj";
 const std::string kDiabloDiffuse = "../res/diablo3_pose/diablo3_pose_diffuse.tga";
@@ -187,10 +187,10 @@ int main() {
     RayTracingMaterial mirror(1.0f, {0.0f, 10.f, 0.8f, 0.0f}, {1.0f, 1.0f, 1.0f}, 1425.f);
 
     std::vector<Sphere> spheres{
-        {Vec3f{-3.f, 0.f, -16.f}, 2, ivory},
-        {Vec3f{-1.f, -1.5f, -12.f}, 2, glass},
-        {Vec3f{1.5f, -0.5f, -18.f}, 3, redRubber},
-        {Vec3f{7.f, 5.f, -18.f}, 4, mirror},
+        {Vec3f{-3.f, 0.f, -18.f}, 2, ivory},
+        {Vec3f{-2.f, -1.5f, -8.f}, 2, glass},
+        {Vec3f{1.5f, -0.5f, -20.f}, 3, redRubber},
+        {Vec3f{7.f, 5.f, -20.f}, 4, mirror},
     };
 
     Mesh duckMesh(kDuckObj);
@@ -199,13 +199,14 @@ int main() {
     Material diabloMat{kDiabloDiffuse, kDiabloNormal, kDiabloSpec};
 
     std::vector<Model> models{{&duckMesh, nullptr, glass},
-                              {&diabloMesh, &diabloMat, {1.0f, {0.8f, 0.1f, 0.1f, 0.0f}, {0.f, 0.f, 0.f}, 0.f}}};
+                              {&diabloMesh, &diabloMat, {1.0f, {1.0f, 0.0f, 0.0f, 0.0f}, {0.f, 0.f, 0.f}, 0.f}}};
 
     Matrix4x4 duckTransform = Matrix4x4::identity();
-    duckTransform[3] = {1.f, 0.f, -3.f, 1.f};
+    duckTransform[3] = {1.f, 0.f, -4.f, 1.f};
 
     Matrix4x4 diabloTransform = Matrix4x4::identity();
-    diabloTransform[3] = {0.f, 0.f, -2.5f, 1.f};
+    diabloTransform[0][0] = diabloTransform[1][1] = diabloTransform[2][2] = 4.f;
+    diabloTransform[3] = {0.f, 0.f, -14.f, 1.f};
     models[0].set_transform(duckTransform);
     models[1].set_transform(diabloTransform);
 

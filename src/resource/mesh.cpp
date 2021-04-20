@@ -116,5 +116,7 @@ bool Mesh::ray_triangle_intersect(const int& faceIndex, const Vec3f& orig, const
     if (u < 0 || u + v > det) return false;
 
     tnear = edge2 * qvec * (1.f / det);
+    u /= det;
+    v /= det;
     return tnear > kFloatLimit;
 }

@@ -38,7 +38,6 @@ bool Model::ray_intersect(const Vec3f& ori, const Vec3f& dir, float& t0, float& 
     if (intersect(localOri, localDir, boundMin, boundMax)) {
         float t = std::numeric_limits<float>::max();
         int hitFace = -1;
-        Vec3f hitMeshNomral;
         float u_, v_;
         for (int i = 0; i < meshRes_->nfaces(); ++i) {
             float tnear;
@@ -58,7 +57,7 @@ bool Model::ray_intersect(const Vec3f& ori, const Vec3f& dir, float& t0, float& 
             const auto& faceVertex = meshRes_->face_vertex(hitFace);
             const Vec3f& edge1 = meshRes_->vert(faceVertex[1]) - meshRes_->vert(faceVertex[0]);
             const Vec3f& edge2 = meshRes_->vert(faceVertex[2]) - meshRes_->vert(faceVertex[0]);
-            hitNormal = cross(edge2, edge1);
+            hitNormal = cross(edge1, edge2);
 
             const auto& faceUV = meshRes_->face_uv(hitFace);
             if (faceUV[0] != -1 && materialRes_ != nullptr) {
