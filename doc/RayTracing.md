@@ -29,6 +29,7 @@ void render(TGAImage& frameBuffer) {
 ```
 
 output:
+
 ![color](./images/color.PNG)
 
 ## 2. 画一个球
@@ -164,6 +165,7 @@ TGAColor cast_ray(const Vec3f& org, const Vec3f& dir, const std::vector<Sphere>&
 ```
 
 加上Diffuse光照后的结果：
+
 ![diffuse_light](./images/diffuse_light.PNG)
 
 ## 4. 高光
@@ -210,6 +212,7 @@ Vec3f reflect(const Vec3f& in, const Vec3f& normal) { return in - normal * 2.f *
 _简单图像学知识就不展开了_
 
 加入高光之后的画面如下：
+
 ![spec](./images/spec.PNG)
 
 ## 5. 反射
@@ -289,6 +292,7 @@ bool scene_intersect(const Vec3f& ori, const Vec3f& dir, const std::vector<Spher
 ```
 
 加上地板后的画面如下：
+
 ![checkerboard](./images/checkerboard.PNG)
 
 有了地板之后画面还是很平，这里还缺少阴影。
@@ -363,6 +367,7 @@ class CubeMap {
 ```
 
 添加了天空盒之后的画面:
+
 ![skybox](./images/skybox.PNG)
 
 

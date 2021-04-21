@@ -4,9 +4,11 @@ mini ray tracing renderer
 
 ## Document
 
-[Implement Note]()
+[Implement Note](https://github.com/MoRunChang2015/MiniRayTracing/blob/master/doc/RayTracing.md)
 
 ## Final Output
+
+![final](./doc/images/models.PNG)
 
 ## Build
 
