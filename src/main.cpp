@@ -164,18 +164,25 @@ Vec3f cast_ray(const Vec3f& ori, const Vec3f& dir, const std::vector<Sphere>& sp
 void render(TGAImage& frameBuffer, const std::vector<Sphere>& spheres, const std::vector<Model>& models,
             const std::vector<Light>& lights) {
     const Vec3f cameraPos{0.f, 0.f, 0.f};
+    std::vector<std::vector<Vec3f>> buffer;
 
-    ConcurrentModule::parallelFor(
-        kWidth * kHeight, [&cameraPos, &spheres, &models, &lights, &frameBuffer](const auto& index) {
-            const int i = index / kHeight;
-            const int j = index % kHeight;
-            const float x = (2 * (i + 0.5) / static_cast<float>(kWidth) - 1) * tan(kFov / 2.f) * kWidth /
-                            static_cast<float>(kHeight);
-            const float y = -(2 * (j + 0.5) / static_cast<float>(kHeight) - 1) * tan(kFov / 2.f);
-            const Vec3f dir = Vec3f(x, y, -1).normalize();
-            frameBuffer.set(i, j, cast_ray(cameraPos, dir, spheres, models, lights));
-            std::cout << "Ray tracing (" << i << " , " << j << ")..Done" << std::endl;
-        });
+    buffer.resize(kWidth + 1);
+    for (size_t i = 0; i < kWidth + 1; ++i) buffer[i].resize(kHeight + 2);
+
+    ConcurrentModule::parallelFor((kWidth + 1) * (kHeight + 1),
+                                  [&cameraPos, &spheres, &models, &lights, &buffer](const auto& index) {
+                                      const int i = index / (kHeight + 1);
+                                      const int j = index % (kHeight + 1);
+                                      const float x = (2 * i / static_cast<float>(kWidth + 1) - 1) * tan(kFov / 2.f) *
+                                                      (kWidth + 1) / static_cast<float>(kHeight + 1);
+                                      const float y = -(2 * j / static_cast<float>(kHeight + 1) - 1) * tan(kFov / 2.f);
+                                      const Vec3f dir = Vec3f(x, y, -1).normalize();
+                                      buffer[i][j] = cast_ray(cameraPos, dir, spheres, models, lights);
+                                      std::cout << "Ray tracing (" << i << " , " << j << ")..Done" << std::endl;
+                                  });
+    for (int i = 0; i < kWidth; ++i)
+        for (int j = 0; j < kHeight; ++j)
+            frameBuffer.set(i, j, (buffer[i][j] + buffer[i + 1][j] + buffer[i][j + 1] + buffer[i + 1][j + 1]) / 4.0f);
 }
 
 int main() {
@@ -199,7 +206,7 @@ int main() {
     Material diabloMat{kDiabloDiffuse, kDiabloNormal, kDiabloSpec};
 
     std::vector<Model> models{{&duckMesh, nullptr, glass},
-                              {&diabloMesh, &diabloMat, {1.0f, {1.0f, 0.0f, 0.0f, 0.0f}, {0.f, 0.f, 0.f}, 0.f}}};
+                              {&diabloMesh, &diabloMat, {1.0f, {0.95f, 0.05f, 0.0f, 0.0f}, {0.f, 0.f, 0.f}, 0.f}}};
 
     Matrix4x4 duckTransform = Matrix4x4::identity();
     duckTransform[3] = {1.f, 0.f, -4.f, 1.f};
